@@ -1,0 +1,301 @@
+### CollegeConnect API Integration Test Suite
+
+@host = http://localhost:8080
+
+### =========================================================================
+### 1. USER AUTHENTICATION FLOW
+### =========================================================================
+
+### Register User A (Alice)
+POST {{host}}/api/auth/register
+Content-Type: application/json
+
+{
+  "username": "alice",
+  "email": "alice@college.edu",
+  "password": "password123",
+  "college": "State Engineering College",
+  "department": "Computer Science",
+  "graduationYear": 2027,
+  "bio": "Enthusiastic developer and study group organizer."
+}
+
+### Register User B (Bob)
+POST {{host}}/api/auth/register
+Content-Type: application/json
+
+{
+  "username": "bob",
+  "email": "bob@college.edu",
+  "password": "password123",
+  "college": "State Engineering College",
+  "department": "Computer Science",
+  "graduationYear": 2027,
+  "bio": "Interested in Competitive Programming and System Design."
+}
+
+### Login as Alice (Save Token)
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "alice",
+  "password": "password123"
+}
+
+> {%
+client.global.set("userA_token", response.body.token);
+client.global.set("userA_id", response.body.id);
+%}
+
+### Login as Bob (Save Token)
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "bob",
+  "password": "password123"
+}
+
+> {%
+client.global.set("userB_token", response.body.token);
+client.global.set("userB_id", response.body.id);
+%}
+
+### Get Alice's Profile (Using Alice Token)
+GET {{host}}/api/auth/me
+Authorization: Bearer {{userA_token}}
+
+
+### =========================================================================
+### 2. PEER CONNECTION FLOW
+### =========================================================================
+
+### Alice sends connection request to Bob (User ID = 2)
+POST {{host}}/api/peers/connect/2
+Authorization: Bearer {{userA_token}}
+
+> {%
+client.global.set("connection_id", response.body.id);
+%}
+
+### Bob views pending requests
+GET {{host}}/api/peers/requests
+Authorization: Bearer {{userB_token}}
+
+### Bob accepts Alice's connection request
+POST {{host}}/api/peers/accept/{{connection_id}}
+Authorization: Bearer {{userB_token}}
+
+### Alice views list of accepted connections
+GET {{host}}/api/peers/connections
+Authorization: Bearer {{userA_token}}
+
+
+### =========================================================================
+### 3. FORUM / ASK FOR HELP FLOW
+### =========================================================================
+
+### Alice creates a discussion post/help request
+POST {{host}}/api/posts
+Authorization: Bearer {{userA_token}}
+Content-Type: application/json
+
+{
+  "title": "Need help with Compiler Design",
+  "content": "Can anyone explain LALR parsing tables? I am struggling with the state reductions.",
+  "category": "Academics"
+}
+
+> {%
+client.global.set("post_id", response.body.id);
+%}
+
+### Bob lists all academic posts
+GET {{host}}/api/posts?category=Academics
+Authorization: Bearer {{userB_token}}
+
+### Bob posts an answer/comment on Alice's post
+POST {{host}}/api/posts/{{post_id}}/comments
+Authorization: Bearer {{userB_token}}
+Content-Type: application/json
+
+{
+  "content": "Check out the Dragon Book, Chapter 4. Reductions happen when there is a dot at the end of the item. Let's schedule a study session!"
+}
+
+### Alice retrieves comments for her post
+GET {{host}}/api/posts/{{post_id}}/comments
+Authorization: Bearer {{userA_token}}
+
+
+### =========================================================================
+### 4. DOCUMENT SHARING FLOW
+### =========================================================================
+
+### Alice uploads a syllabus cheat sheet document
+POST {{host}}/api/documents/upload
+Authorization: Bearer {{userA_token}}
+Content-Type: multipart/form-data; boundary=boundary
+
+--boundary
+Content-Disposition: form-data; name="title"
+
+Data Structures Cheat Sheet
+--boundary
+Content-Disposition: form-data; name="description"
+
+Important formulas, time complexities, and tree traversals for midterms.
+--boundary
+Content-Disposition: form-data; name="department"
+
+Computer Science
+--boundary
+Content-Disposition: form-data; name="file"; filename="ds-notes.txt"
+Content-Type: text/plain
+
+Data Structures Midterm Cheat Sheet:
+1. BST Search: O(log N) average, O(N) worst.
+2. Balanced Trees (AVL/Red-Black): O(log N) always.
+3. Graph DFS/BFS: O(V + E) complexity.
+--boundary--
+
+> {%
+client.global.set("doc_id", response.body.id);
+%}
+
+### Bob searches for CS department documents
+GET {{host}}/api/documents?department=Computer Science
+Authorization: Bearer {{userB_token}}
+
+### Bob downloads the cheat sheet document
+GET {{host}}/api/documents/download/{{doc_id}}
+Authorization: Bearer {{userB_token}}
+
+
+### =========================================================================
+### 5. TEXTBOOK EXCHANGE / BOOK MARKETPLACE FLOW
+### =========================================================================
+
+### Alice lists a textbook for sale
+POST {{host}}/api/books
+Authorization: Bearer {{userA_token}}
+Content-Type: application/json
+
+{
+  "title": "Introduction to Algorithms (CLRS)",
+  "author": "Cormen, Leiserson, Rivest, Stein",
+  "description": "3rd Edition. Very good condition, no pen marks.",
+  "price": 25.0
+}
+
+> {%
+client.global.set("book_id", response.body.id);
+%}
+
+### Bob views available marketplace books
+GET {{host}}/api/books
+Authorization: Bearer {{userB_token}}
+
+### Bob claims Alice's book listing
+POST {{host}}/api/books/{{book_id}}/claim
+Authorization: Bearer {{userB_token}}
+
+### Alice verifies her listing is marked unavailable
+GET {{host}}/api/books/my
+Authorization: Bearer {{userA_token}}
+
+
+### =========================================================================
+### 6. PEER POLL FLOW
+### =========================================================================
+
+### Bob creates a poll
+POST {{host}}/api/polls
+Authorization: Bearer {{userB_token}}
+Content-Type: application/json
+
+{
+  "question": "Which backend stack do you prefer for your main projects?",
+  "options": [
+    "Spring Boot (Java)",
+    "Node.js (JavaScript)",
+    "Django (Python)"
+  ],
+  "expiresAt": "2026-12-31T23:59:59"
+}
+
+> {%
+// Capture the poll details
+client.global.set("poll_id", response.body.id);
+client.global.set("option1_id", response.body.options[0].id);
+client.global.set("option2_id", response.body.options[1].id);
+%}
+
+### Alice fetches all active polls
+GET {{host}}/api/polls
+Authorization: Bearer {{userA_token}}
+
+### Alice votes for Spring Boot (Option ID 1)
+POST {{host}}/api/polls/{{poll_id}}/vote
+Authorization: Bearer {{userA_token}}
+Content-Type: application/json
+
+{
+  "optionId": {{option1_id}}
+}
+
+### Alice tries to vote again (Should fail with duplicate warning)
+POST {{host}}/api/polls/{{poll_id}}/vote
+Authorization: Bearer {{userA_token}}
+Content-Type: application/json
+
+{
+  "optionId": {{option2_id}}
+}
+
+
+### =========================================================================
+### 7. FEST DETAILS & COLLEGE CIRCULARS (REDIS CACHING)
+### =========================================================================
+
+### Coordinator lists a college Fest (Triggers Cache Eviction)
+POST {{host}}/api/fests
+Authorization: Bearer {{userA_token}}
+Content-Type: application/json
+
+{
+  "title": "TechXplore 2026",
+  "description": "Annual national level technical symposium featuring Hackathons, Robotics, and Coding challenges.",
+  "location": "Main Campus Auditorium",
+  "eventDate": "2026-10-15T09:00:00",
+  "coordinatorName": "Prof. Alan Turing",
+  "coordinatorEmail": "turing@college.edu"
+}
+
+### Fetch Fests: Test Cache Miss (Hits Database & Saves to Redis)
+GET {{host}}/api/fests
+Authorization: Bearer {{userA_token}}
+
+### Fetch Fests: Test Cache Hit (Loads instantly from Redis cache)
+GET {{host}}/api/fests
+Authorization: Bearer {{userB_token}}
+
+### Dean creates a new circular notice
+POST {{host}}/api/circulars
+Authorization: Bearer {{userA_token}}
+Content-Type: application/json
+
+{
+  "title": "Revised Academic Calendar - Semester End",
+  "content": "Please note that all semester-end laboratory assessments will be held from Nov 15th to Nov 25th. Theories start Dec 1st.",
+  "postedBy": "Dean Academics"
+}
+
+### Fetch Circulars: Cache Miss (Loads from database and caches)
+GET {{host}}/api/circulars
+Authorization: Bearer {{userA_token}}
+
+### Fetch Circulars: Cache Hit (Reads directly from Redis)
+GET {{host}}/api/circulars
+Authorization: Bearer {{userB_token}}
